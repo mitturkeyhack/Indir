@@ -22,6 +22,19 @@ object Store {
 
     fun treeUri(ctx: Context): Uri? = prefs(ctx).getString(PREF_TREE, null)?.let { Uri.parse(it) }
 
+    /** true: indirilenler Wi-Fi ile Huawei'deki TV Disk'e (flash diske) gönderilir. */
+    fun isWifi(ctx: Context): Boolean = prefs(ctx).getBoolean("wifi", false)
+    fun setWifi(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean("wifi", on).apply()
+
+    fun wifiLabel(): String {
+        val p = WifiTarget.best() ?: return "Aranıyor… Huawei'de TV Disk → Kablosuz Aktar → Al açık olmalı"
+        if (!p.diskReady) return "${p.name} bulundu · ama orada flash disk seçilmemiş"
+        return buildString {
+            append("Bağlı · ").append(p.diskName.ifBlank { "Flash disk" })
+            if (p.free >= 0) append(" · ").append(String.format(Locale("tr"), "%.1f GB boş", p.free / 1e9))
+        }
+    }
+
     fun isUsb(ctx: Context): Boolean {
         val u = treeUri(ctx) ?: return false
         val id = try { DocumentsContract.getTreeDocumentId(u) } catch (_: Exception) { return false }

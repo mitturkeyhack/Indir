@@ -17,12 +17,19 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
+import com.erkam.indir.net.SenderCore
 import java.io.File
+import java.io.FileInputStream
+import java.io.IOException
+import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 enum class Status { WAITING, RUNNING, SAVING, DONE, FAILED, CANCELED }
 
-class Job(val url: String, val audio: Boolean, val quality: Int) {
+class Job(val url: String, val audio: Boolean, val quality: Int, val wifi: Boolean = false) {
     val id: String = UUID.randomUUID().toString()
     @Volatile var title: String = url
     @Volatile var status: Status = Status.WAITING
@@ -48,8 +55,8 @@ object Jobs {
 
     fun snapshot(): List<Job> = synchronized(list) { list.toList() }
 
-    fun add(ctx: Context, url: String, audio: Boolean, quality: Int) {
-        synchronized(list) { list.add(0, Job(url, audio, quality)) }
+    fun add(ctx: Context, url: String, audio: Boolean, quality: Int, wifi: Boolean = Store.isWifi(ctx)) {
+        synchronized(list) { list.add(0, Job(url, audio, quality, wifi)) }
         changed()
         val i = Intent(ctx, DownloadService::class.java)
         if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i) else ctx.startService(i)
@@ -69,12 +76,15 @@ object Jobs {
 
     fun retry(ctx: Context, job: Job) {
         synchronized(list) { list.remove(job) }
-        add(ctx, job.url, job.audio, job.quality)
+        add(ctx, job.url, job.audio, job.quality, job.wifi)
     }
 }
 
 class DownloadService : Service() {
     private var worker: Thread? = null
+    // Huawei'ye gönderim ayrı iş parçacığında: bir video giderken sıradaki iner
+    private val sender = Executors.newSingleThreadExecutor()
+    private val pendingSends = AtomicInteger(0)
     private var wake: PowerManager.WakeLock? = null
     private lateinit var nm: NotificationManager
 
@@ -102,12 +112,18 @@ class DownloadService : Service() {
     private fun loop() {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "indir:dl").apply { acquire(3 * 3600 * 1000L) }
+        WifiTarget.acquire(this)
         try {
             while (true) {
-                val job = Jobs.next() ?: break
+                val job = Jobs.next()
+                if (job == null) {
+                    if (pendingSends.get() > 0) { Thread.sleep(500); continue }
+                    break
+                }
                 run(job)
             }
         } finally {
+            WifiTarget.release()
             try { wake?.release() } catch (_: Exception) { }
             Handler(Looper.getMainLooper()).post {
                 ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -129,6 +145,7 @@ class DownloadService : Service() {
             return
         }
         val tmp = File(cacheDir, "dl/${job.id}").apply { deleteRecursively(); mkdirs() }
+        var handedOff = false
         try {
             val req = YoutubeDLRequest(job.url)
             req.addOption("-o", tmp.absolutePath + "/%(title).80B.%(ext)s")
@@ -173,6 +190,11 @@ class DownloadService : Service() {
                 ?.sortedByDescending { it.length() }.orEmpty()
             val f = files.firstOrNull() ?: throw IllegalStateException("İndirilen dosya bulunamadı.")
             job.title = f.nameWithoutExtension
+            if (job.wifi) {
+                handedOff = true
+                sendToHuawei(job, f, tmp)
+                return
+            }
             job.status = Status.SAVING
             job.progress = 0f
             job.info = "Flash diske yazılıyor…"
@@ -204,8 +226,78 @@ class DownloadService : Service() {
                 job.info = "İptal edildi"; Jobs.changed()
             } else fail(job, friendly(e.message ?: e.toString()))
         } finally {
-            tmp.deleteRecursively()
+            if (!handedOff) tmp.deleteRecursively()
         }
+    }
+
+    /** İndirilen dosyayı Wi-Fi ile Huawei'deki TV Disk'e gönderir; bitince geçici dosya silinir. */
+    private fun sendToHuawei(job: Job, f: File, tmp: File) {
+        job.status = Status.SAVING
+        job.progress = 0f
+        job.info = "Huawei'ye gönderilmeyi bekliyor…"
+        Jobs.changed(); update(job)
+        pendingSends.incrementAndGet()
+        sender.execute {
+            try {
+                if (f.length() > 4L * 1024 * 1024 * 1024 - 1)
+                    throw IllegalStateException("Dosya 4 GB'tan büyük, FAT32 flash disk bunu kaldırmaz. Daha düşük kalite seç.")
+                val folder = if (job.audio) "MUZIK" else "FILMLER"
+                var attempt = 0
+                while (true) {
+                    attempt++
+                    job.info = "Huawei aranıyor…"; Jobs.changed(false); update(job)
+                    val peer = WifiTarget.waitFor(20_000)
+                        ?: throw IllegalStateException("Huawei bulunamadı. Huawei'de TV Disk → Kablosuz Aktar → Al açık mı? İki telefon aynı Wi-Fi'de mi?")
+                    if (!peer.diskReady)
+                        throw IllegalStateException("Huawei'de flash disk seçili değil. Huawei'deki TV Disk'te \"USB diski seç\"e bas, sonra Tekrar'a dokun.")
+                    try {
+                        val name = (if (job.audio) "MUZIK/" else "") + f.name
+                        val fin = SenderCore.send(peer.host, peer.port, name, f.length(), FileInputStream(f), { false }) { done, total, bps ->
+                            job.progress = done * 100f / total
+                            val left = if (bps > 0) ((total - done) / bps).toLong() else -1
+                            job.info = buildString {
+                                append(String.format(Locale("tr"), "Huawei'ye gönderiliyor %%%.0f · %.1f MB/sn", job.progress, bps / 1e6))
+                                if (left >= 0) append(" · ").append(etaText(left)).append(" kaldı")
+                            }
+                            Jobs.changed(false); update(job)
+                        }
+                        job.savedUri = null
+                        job.savedName = fin
+                        job.status = Status.DONE
+                        job.progress = 100f
+                        job.info = "Huawei'deki flash diske yazıldı: $folder/$fin"
+                        Jobs.changed()
+                        break
+                    } catch (e: IOException) {
+                        val m = e.message ?: ""
+                        // Bağlantı sorunlarında 3 kez dene; alıcının "yer yok" gibi cevaplarında deneme
+                        val retryable = e is java.net.ConnectException || e is java.net.SocketTimeoutException ||
+                            m.startsWith("Bağlantı koptu") || m.contains("reset", true)
+                        if (!retryable || attempt >= 3) {
+                            throw IllegalStateException(
+                                if (e is java.net.ConnectException || e is java.net.SocketTimeoutException)
+                                    "Huawei'ye bağlanılamadı. İki telefon aynı Wi-Fi'de mi, Huawei'de \"Al\" ekranı açık mı?"
+                                else m.ifBlank { "Gönderilemedi" })
+                        }
+                        job.info = "Bağlantı koptu, tekrar deneniyor ($attempt/3)…"; Jobs.changed(false)
+                        Thread.sleep(2000)
+                    }
+                }
+            } catch (e: IllegalStateException) {
+                fail(job, e.message ?: "Gönderilemedi")
+            } catch (e: Throwable) {
+                fail(job, "Gönderilemedi: ${e.message ?: e}")
+            } finally {
+                tmp.deleteRecursively()
+                pendingSends.decrementAndGet()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        sender.shutdown()
+        try { sender.awaitTermination(1, TimeUnit.SECONDS) } catch (_: Exception) { }
     }
 
     private fun fail(job: Job, msg: String) {

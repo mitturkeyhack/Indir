@@ -7,6 +7,7 @@ Reklamsız, ücretsiz müzik ve video indirici. İndirdiklerini **direkt flash d
 - YouTube ve yüzlerce site (Instagram, TikTok, X…) — arka planda [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 - YouTube'da **Paylaş → İndir** ile link kendiliğinden gelir
 - Flash diskte `Muzik` ve `Video` klasörleri açılır
+- **Huawei'deki flash disk (Wi-Fi):** İndirilen dosya aynı Wi-Fi'deki diğer telefonda açık olan TV Disk'e (Kablosuz Aktar → Al) gider ve oradaki flash diske yazılır; bu telefondaki geçici dosya silinir
 - İndirici 2 günde bir kendini günceller; sorun olursa "İndiriciyi güncelle"
 
 ## APK

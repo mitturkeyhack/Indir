@@ -31,6 +31,7 @@ class MainActivity : Activity() {
 
     private val jobListener: () -> Unit = { render() }
     private val engineListener: () -> Unit = { renderEngine() }
+    private val wifiListener: () -> Unit = { renderPlace() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,8 +56,19 @@ class MainActivity : Activity() {
         }
         renderQuality()
 
-        findViewById<View>(R.id.btnPlace).setOnClickListener { Store.showPicker(this, REQ_TREE) }
-        findViewById<View>(R.id.cardPlace).setOnClickListener { Store.showPicker(this, REQ_TREE) }
+        findViewById<View>(R.id.btnPlace).setOnClickListener { Store.setWifi(this, false); Store.showPicker(this, REQ_TREE) }
+        findViewById<View>(R.id.optLocal).setOnClickListener {
+            Store.setWifi(this, false)
+            if (Store.treeUri(this) == null) Store.showPicker(this, REQ_TREE)
+            renderPlace()
+        }
+        findViewById<View>(R.id.optWifi).setOnClickListener {
+            Store.setWifi(this, true)
+            renderPlace()
+            if (WifiTarget.best() == null) {
+                toast("Huawei'de TV Disk → Kablosuz Aktar → Al ekranını aç")
+            }
+        }
         findViewById<View>(R.id.btnPaste).setOnClickListener { pasteFromClipboard(true) }
         findViewById<View>(R.id.btnClear).setOnClickListener { etUrl.setText("") }
         findViewById<View>(R.id.btnMp3).setOnClickListener { start(true) }
@@ -69,7 +81,7 @@ class MainActivity : Activity() {
         }
 
         handleShare(intent)
-        if (Store.treeUri(this) == null) {
+        if (Store.treeUri(this) == null && !Store.isWifi(this)) {
             tvPlace.post { Store.showPicker(this, REQ_TREE) }
         }
     }
@@ -84,7 +96,9 @@ class MainActivity : Activity() {
         super.onResume()
         Jobs.listeners.add(jobListener)
         Engine.listeners.add(engineListener)
-        tvPlace.text = Store.label(this)
+        WifiTarget.listeners.add(wifiListener)
+        WifiTarget.acquire(this)
+        renderPlace()
         render()
         renderEngine()
     }
@@ -93,6 +107,20 @@ class MainActivity : Activity() {
         super.onPause()
         Jobs.listeners.remove(jobListener)
         Engine.listeners.remove(engineListener)
+        WifiTarget.listeners.remove(wifiListener)
+        WifiTarget.release()
+    }
+
+    private fun renderPlace() {
+        val wifi = Store.isWifi(this)
+        tvPlace.text = Store.label(this)
+        val tvWifi = findViewById<TextView>(R.id.tvWifi)
+        tvWifi.text = Store.wifiLabel()
+        val p = WifiTarget.best()
+        tvWifi.setTextColor(getColor(if (p != null && p.diskReady) R.color.ok else R.color.sub))
+        findViewById<View>(R.id.optLocal).setBackgroundResource(if (!wifi) R.drawable.bg_option_sel else R.drawable.bg_option)
+        findViewById<View>(R.id.optWifi).setBackgroundResource(if (wifi) R.drawable.bg_option_sel else R.drawable.bg_option)
+        findViewById<View>(R.id.wifiCheck).visibility = if (wifi) View.VISIBLE else View.INVISIBLE
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -106,7 +134,8 @@ class MainActivity : Activity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQ_TREE && resultCode == RESULT_OK) {
             Store.handlePick(this, data)
-            tvPlace.text = Store.label(this)
+            Store.setWifi(this, false)
+            renderPlace()
             if (!Store.isUsb(this)) toast("Telefon klasörü seçildi. Flash disk için tekrar seçebilirsin.")
         }
     }
@@ -134,6 +163,21 @@ class MainActivity : Activity() {
     private fun start(audio: Boolean) {
         val url = extractUrl(etUrl.text.toString())
         if (url == null) { toast("Önce bir link yapıştır."); return }
+        if (Store.isWifi(this)) {
+            val p = WifiTarget.best()
+            if (p == null || !p.diskReady) {
+                AlertDialog.Builder(this)
+                    .setMessage(if (p == null)
+                        "Huawei şu an bulunamadı.\n\nHuawei'de TV Disk → Kablosuz Aktar → \"Bu telefon ALSIN\" ekranı açık mı? İki telefon aynı Wi-Fi'de mi?\n\nYine de sıraya ekleyebilirsin; indirme bitince Huawei'yi arar."
+                    else "Huawei bulundu ama orada flash disk seçilmemiş. Huawei'deki TV Disk'te \"USB diski seç\"e bas.")
+                    .setPositiveButton("Yine de indir") { _, _ -> enqueue(url, audio) }
+                    .setNegativeButton("Vazgeç", null)
+                    .show()
+                return
+            }
+            enqueue(url, audio)
+            return
+        }
         if (Store.root(this) == null) {
             AlertDialog.Builder(this)
                 .setMessage(if (Store.treeUri(this) == null) "Önce dosyaların kaydedileceği yeri seç."
@@ -143,6 +187,10 @@ class MainActivity : Activity() {
                 .show()
             return
         }
+        enqueue(url, audio)
+    }
+
+    private fun enqueue(url: String, audio: Boolean) {
         Jobs.add(this, url, audio, quality)
         etUrl.setText("")
         // Aynı linki panodan tekrar çekmesin
@@ -150,7 +198,7 @@ class MainActivity : Activity() {
             (getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                 .setPrimaryClip(android.content.ClipData.newPlainText("", ""))
         } catch (_: Exception) { }
-        toast(if (audio) "Müzik indiriliyor" else "Video indiriliyor")
+        toast((if (audio) "Müzik indiriliyor" else "Video indiriliyor") + (if (Store.isWifi(this)) " → Huawei" else ""))
     }
 
     private fun updateEngine() {
@@ -232,7 +280,8 @@ class MainActivity : Activity() {
         when (job.status) {
             Status.WAITING, Status.RUNNING -> { act.text = "İptal"; act.setOnClickListener { Jobs.cancel(job) } }
             Status.SAVING -> act.visibility = View.GONE
-            Status.DONE -> { act.text = "Aç"; act.setOnClickListener { open(job) } }
+            Status.DONE -> if (job.savedUri != null) { act.text = "Aç"; act.setOnClickListener { open(job) } }
+                else { act.text = "Kaldır"; act.setOnClickListener { Jobs.cancel(job) } }
             Status.FAILED -> { act.text = "Tekrar"; act.setOnClickListener { Jobs.retry(this, job) } }
             Status.CANCELED -> { act.text = "Kaldır"; act.setOnClickListener { Jobs.cancel(job) } }
         }
