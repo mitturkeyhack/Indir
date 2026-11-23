@@ -1,0 +1,9 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- turuncu daire -->
+    <path android:fillColor="#FFB020" android:pathData="M54,24 A30,30 0 1 1 53.99,24 Z" />
+    <!-- aşağı ok -->
+    <path android:fillColor="#0F1B2D" android:pathData="M49,34 H59 V52 H67 L54,66 L41,52 H49 Z" />
+    <!-- flash disk çizgisi -->
+    <path android:fillColor="#0F1B2D" android:pathData="M40,70 H68 A2.5,2.5 0 0 1 68,75 H40 A2.5,2.5 0 0 1 40,70 Z" />
+</vector>

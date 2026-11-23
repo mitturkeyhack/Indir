@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView style="@style/Title" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="İndir" />
+        <TextView style="@style/Sub" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Reklamsız müzik ve video · direkt flash diske" />
+
+        <!-- Kayıt yeri -->
+        <LinearLayout style="@style/Card" android:id="@+id/cardPlace"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical">
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:orientation="vertical">
+                <TextView style="@style/Sub" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textSize="12sp" android:text="KAYIT YERİ" android:letterSpacing="0.08" />
+                <TextView android:id="@+id/tvPlace" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:textColor="@color/text" android:textSize="16sp" android:textStyle="bold"
+                    android:layout_marginTop="2dp" android:text="Seçilmedi" />
+            </LinearLayout>
+            <TextView android:id="@+id/btnPlace" style="@style/Btn2"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="0dp" android:minHeight="44dp"
+                android:paddingLeft="16dp" android:paddingRight="16dp" android:text="Değiştir" />
+        </LinearLayout>
+
+        <!-- Link -->
+        <LinearLayout style="@style/Card" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <EditText android:id="@+id/etUrl" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:background="@drawable/bg_option" android:padding="14dp"
+                android:hint="Linki buraya yapıştır" android:textColorHint="@color/sub"
+                android:textColor="@color/text" android:textSize="15sp"
+                android:inputType="textUri" android:maxLines="3" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <TextView android:id="@+id/btnPaste" style="@style/Btn2" android:layout_width="0dp"
+                    android:layout_height="wrap_content" android:layout_weight="1" android:text="📋  Yapıştır" />
+                <View android:layout_width="10dp" android:layout_height="1dp" />
+                <TextView android:id="@+id/btnClear" style="@style/Btn2" android:layout_width="0dp"
+                    android:layout_height="wrap_content" android:layout_weight="1" android:text="Temizle" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Kalite -->
+        <TextView style="@style/Sub" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="18dp" android:text="Video kalitesi" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:layout_marginTop="8dp">
+            <TextView android:id="@+id/q360" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:background="@drawable/bg_option" android:gravity="center"
+                android:padding="10dp" android:textColor="@color/text" android:textSize="14sp"
+                android:text="Düşük\n360p" />
+            <View android:layout_width="8dp" android:layout_height="1dp" />
+            <TextView android:id="@+id/q720" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:background="@drawable/bg_option" android:gravity="center"
+                android:padding="10dp" android:textColor="@color/text" android:textSize="14sp"
+                android:text="TV için\n720p" />
+            <View android:layout_width="8dp" android:layout_height="1dp" />
+            <TextView android:id="@+id/q1080" android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:background="@drawable/bg_option" android:gravity="center"
+                android:padding="10dp" android:textColor="@color/text" android:textSize="14sp"
+                android:text="Yüksek\n1080p" />
+        </LinearLayout>
+
+        <!-- İndir düğmeleri -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView android:id="@+id/btnMp3" style="@style/Btn" android:layout_width="0dp"
+                android:layout_height="wrap_content" android:layout_weight="1" android:text="🎵  Müzik\nMP3" />
+            <View android:layout_width="10dp" android:layout_height="1dp" />
+            <TextView android:id="@+id/btnMp4" style="@style/Btn" android:layout_width="0dp"
+                android:layout_height="wrap_content" android:layout_weight="1" android:text="🎬  Video\nMP4" />
+        </LinearLayout>
+
+        <TextView android:id="@+id/tvEngine" style="@style/Sub" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="10dp" android:gravity="center"
+            android:textSize="13sp" android:visibility="gone" />
+
+        <!-- İndirmeler -->
+        <TextView style="@style/CardTitle" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="24dp" android:text="İndirmeler" />
+        <LinearLayout android:id="@+id/list" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" />
+        <TextView android:id="@+id/tvEmpty" style="@style/Sub" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="10dp"
+            android:text="Henüz indirme yok.\nİpucu: YouTube'da Paylaş → İndir dersen link buraya kendiliğinden gelir." />
+
+        <TextView android:id="@+id/btnUpdate" style="@style/Btn2" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="28dp" android:text="🔄  İndiriciyi güncelle" />
+        <TextView android:id="@+id/tvVersion" style="@style/Sub" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="6dp" android:gravity="center"
+            android:textSize="12sp" />
+    </LinearLayout>
+</ScrollView>
